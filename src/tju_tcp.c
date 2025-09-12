@@ -103,7 +103,7 @@ tju_tcp_t *tju_accept(tju_tcp_t *listen_sock)
 int tju_connect(tju_tcp_t *sock, tju_sock_addr target_addr)
 {
 
-    sock->established_remote_addr = target_addr;
+    // sock->established_remote_addr = target_addr;
 
     tju_sock_addr local_addr;
     local_addr.ip = inet_network("172.17.0.2");
@@ -114,7 +114,18 @@ int tju_connect(tju_tcp_t *sock, tju_sock_addr target_addr)
     // 实际在linux中 connect调用后 会进入一个while循环
     // 循环跳出的条件是socket的状态变为ESTABLISHED 表面看上去就是 正在连接中 阻塞
     // 而状态的改变在别的地方进行 在我们这就是tju_handle_packet
-    sock->state = ESTABLISHED;
+
+    unit32_t CLIENT_ISN = isn_gen();
+
+    char *msg = create_packet_buf(sock->established_local_addr.port, sock->established_remote_addr.port, CLIENT_ISN, 0, DEFAULT_HEADER_LEN, DEFAULT_HEADER_LEN + 0, SYN_FLAG_MASK, 1, 0, NULL, 0);
+    sendToLayer3(msg, DEFAULT_HEADER_LEN);
+
+    sock->state = SYN_SENT;
+
+    while (sock->state != ESTABLISHED)
+        ;
+
+    sock->established_remote_addr = target_addr;
 
     // 将建立了连接的socket放入内核 已建立连接哈希表中
     int hashval = cal_hash(local_addr.ip, local_addr.port, target_addr.ip, target_addr.port);
