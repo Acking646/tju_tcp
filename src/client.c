@@ -7,7 +7,7 @@ int main(int argc, char **argv)
     startSimulation();
 
     tju_tcp_t *my_socket = tju_socket();
-    // printf("my_tcp state %d\n", my_socket->state);
+    printf("my_tcp state %d\n", my_socket->state);
 
     tju_sock_addr target_addr;
     target_addr.ip = inet_network("172.17.0.3");
