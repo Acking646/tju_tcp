@@ -60,6 +60,9 @@ int tju_listen(tju_tcp_t *sock)
 */
 tju_tcp_t *tju_accept(tju_tcp_t *listen_sock)
 {
+    while (listen_sock->stata != SYN_RECV)
+        ; // 阻塞 直到有SYN_RECV的socket
+
     tju_tcp_t *new_conn = (tju_tcp_t *)malloc(sizeof(tju_tcp_t));
     memcpy(new_conn, listen_sock, sizeof(tju_tcp_t));
 
@@ -102,8 +105,9 @@ tju_tcp_t *tju_accept(tju_tcp_t *listen_sock)
 */
 int tju_connect(tju_tcp_t *sock, tju_sock_addr target_addr)
 {
+    printf("tju_connect\n");
 
-    // sock->established_remote_addr = target_addr;
+    sock->established_remote_addr = target_addr;
 
     tju_sock_addr local_addr;
     local_addr.ip = inet_network("172.17.0.2");
@@ -115,17 +119,15 @@ int tju_connect(tju_tcp_t *sock, tju_sock_addr target_addr)
     // 循环跳出的条件是socket的状态变为ESTABLISHED 表面看上去就是 正在连接中 阻塞
     // 而状态的改变在别的地方进行 在我们这就是tju_handle_packet
 
-    unit32_t CLIENT_ISN = isn_gen();
-
-    char *msg = create_packet_buf(sock->established_local_addr.port, sock->established_remote_addr.port, CLIENT_ISN, 0, DEFAULT_HEADER_LEN, DEFAULT_HEADER_LEN + 0, SYN_FLAG_MASK, 1, 0, NULL, 0);
-    sendToLayer3(msg, DEFAULT_HEADER_LEN);
+    char *msg = create_packet_buf(sock->established_local_addr.port, target_addr.port, 1, 0, DEFAULT_HEADER_LEN, DEFAULT_HEADER_LEN + 0, SYN_FLAG_MASK, 1, 0, NULL, 0);
+    int msg_len = strlen(msg);
+    sendToLayer3(msg, msg_len);
 
     sock->state = SYN_SENT;
+    printf("client:SYN_SENT\n");
 
     while (sock->state != ESTABLISHED)
         ;
-
-    sock->established_remote_addr = target_addr;
 
     // 将建立了连接的socket放入内核 已建立连接哈希表中
     int hashval = cal_hash(local_addr.ip, local_addr.port, target_addr.ip, target_addr.port);
@@ -195,7 +197,15 @@ int tju_recv(tju_tcp_t *sock, void *buffer, int len)
 int tju_handle_packet(tju_tcp_t *sock, char *pkt)
 {
 
+    print("tju_handle_packet\n");
     uint32_t data_len = get_plen(pkt) - DEFAULT_HEADER_LEN;
+    uint8_t flag = get_flags(pkt);
+    uint32_t seq = get_seq(pkt);
+    uint32_t ack = get_ack(pkt);
+    uint16_t rwnd_pkt = get_advertised_window(pkt);
+    uint16_t src_port = get_src(pkt);
+    uint16_t dst_port = get_dst(pkt);
+    tju_tcp_t *new_conn = NULL;
 
     // 把收到的数据放到接受缓冲区
     while (pthread_mutex_lock(&(sock->recv_lock)) != 0)
@@ -207,6 +217,7 @@ int tju_handle_packet(tju_tcp_t *sock, char *pkt)
     }
     else
     {
+        // realloc 扩展缓冲区
         sock->received_buf = realloc(sock->received_buf, sock->received_len + data_len);
     }
     memcpy(sock->received_buf + sock->received_len, pkt + DEFAULT_HEADER_LEN, data_len);
@@ -214,6 +225,18 @@ int tju_handle_packet(tju_tcp_t *sock, char *pkt)
 
     pthread_mutex_unlock(&(sock->recv_lock)); // 解锁
 
+    switch (sock->state)
+    {
+    case LISTEN;
+        if(flag==SYN_FLAG_MASK){
+            printf("SYN_FLAG RECEIVED : %d\n",flag);
+            sock->state=SYN_RECV;
+            sock->state=SYN_RECV;
+            char *pkt=create_packet_buf(dst_port,src_port,ack+1,seq+1,DEFAULT_HEADER_LEN,DEFAULT_HEADER_LEN,SYN_FLAG_MASK | ACK_FLAG_MASK, 1, 0, NULL, 0);
+            sendToLayer3(pkt, strlen(pkt));
+        }
+        break;
+    }
     return 0;
 }
 

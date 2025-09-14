@@ -4,6 +4,7 @@
 */
 void onTCPPocket(char *pkt)
 {
+    printf("onTCPPocket\n"); // 调试输出
     // 当我们收到TCP包时 包中 源IP 源端口 是发送方的 也就是我们眼里的 远程(remote) IP和端口
     uint16_t remote_port = get_src(pkt);
     uint16_t local_port = get_dst(pkt);
@@ -64,13 +65,15 @@ void sendToLayer3(char *packet_buf, int packet_len)
     char hostname[8];
     gethostname(hostname, 8);
 
-    struct sockaddr_in conn;
+    printf("sendToLayer3 on hostname: %s\n", hostname);
+    struct sockaddr_in conn; // 声明了一个 IPv4 套接字地址结构体
     conn.sin_family = AF_INET;
     conn.sin_port = htons(20218);
     int rst;
     if (strcmp(hostname, "server") == 0)
     {
         conn.sin_addr.s_addr = inet_addr("172.17.0.2");
+        // 负责把内存里的 TCP 报文直接通过 UDP 送出去
         rst = sendto(BACKEND_UDPSOCKET_ID, packet_buf, packet_len, 0, (struct sockaddr *)&conn, sizeof(conn));
     }
     else if (strcmp(hostname, "client") == 0)
@@ -105,8 +108,9 @@ void *receive_thread(void *arg)
 
     while (1)
     {
-        // MSG_PEEK 表示看一眼 不会把数据从缓冲区删除
-        len = recvfrom(BACKEND_UDPSOCKET_ID, hdr, DEFAULT_HEADER_LEN, MSG_PEEK, (struct sockaddr *)&from_addr, &from_addr_size);
+        print("working\n")
+            // MSG_PEEK 表示看一眼 不会把数据从缓冲区删除
+            len = recvfrom(BACKEND_UDPSOCKET_ID, hdr, DEFAULT_HEADER_LEN, MSG_PEEK, (struct sockaddr *)&from_addr, &from_addr_size);
         // 一旦收到了大于header长度的数据 则接受整个TCP包
         if (len >= DEFAULT_HEADER_LEN)
         {
@@ -118,6 +122,7 @@ void *receive_thread(void *arg)
                 n = recvfrom(BACKEND_UDPSOCKET_ID, pkt + buf_size, plen - buf_size, NO_FLAG, (struct sockaddr *)&from_addr, &from_addr_size);
                 buf_size = buf_size + n;
             }
+            printf("receive_thread:received a packet\n");
             // 通知内核收到一个完整的TCP报文
             onTCPPocket(pkt);
             free(pkt);
@@ -145,7 +150,7 @@ void startSimulation()
     // 获取hostname
     char hostname[8];
     gethostname(hostname, 8);
-    // printf("startSimulation on hostname: %s\n", hostname);
+    printf("startSimulation on hostname: %s\n", hostname);
 
     BACKEND_UDPSOCKET_ID = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (BACKEND_UDPSOCKET_ID < 0)
@@ -154,7 +159,7 @@ void startSimulation()
         exit(-1);
     }
 
-    // 设置socket选项 SO_REUSEADDR = 1
+    // 设置socket选项 SO_REUSEADDR = 1 允许端口复用 避免 socket 关闭后进入 TIME_WAIT 状态时，无法重新绑定同一个端口
     // 意思是 允许绑定本地地址冲突 和 改变了系统对处于TIME_WAIT状态的socket的看待方式
     int optval = 1;
     setsockopt(BACKEND_UDPSOCKET_ID, SOL_SOCKET, SO_REUSEADDR, (const void *)&optval, sizeof(int));
@@ -162,7 +167,7 @@ void startSimulation()
     struct sockaddr_in conn;
     memset(&conn, 0, sizeof(conn));
     conn.sin_family = AF_INET;
-    conn.sin_addr.s_addr = htonl(INADDR_ANY); // INADDR_ANY = 0.0.0.0
+    conn.sin_addr.s_addr = htonl(INADDR_ANY); // INADDR_ANY = 0.0.0.0 表示绑定所有本地网卡
     conn.sin_port = htons((unsigned short)20218);
 
     if (bind(BACKEND_UDPSOCKET_ID, (struct sockaddr *)&conn, sizeof(conn)) < 0)
@@ -171,6 +176,7 @@ void startSimulation()
         exit(-1);
     }
 
+    // 单独开一个后台线程 receive_thread，不断从 BACKEND_UDPSOCKET_ID 上 recvfrom，获取报文
     pthread_t thread_id = 1001;
     int rst = pthread_create(&thread_id, NULL, receive_thread, (void *)(&BACKEND_UDPSOCKET_ID));
     if (rst < 0)
@@ -178,7 +184,7 @@ void startSimulation()
         printf("ERROR open thread");
         exit(-1);
     }
-    // printf("successfully created bankend thread\n");
+    printf("successfully created bankend thread\n");
     return;
 }
 

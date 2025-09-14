@@ -1,6 +1,18 @@
 #include "tju_packet.h"
 
 /*
+简化版的 TCP 初始序列号生成器
+*/
+uint32_t isn_gen()
+{
+    // 获取当前时间戳
+    unit32_t time_stamp = (uint32_t)time(NULL);
+    // 获取一个随机数
+    uint32_t random_number = (uint32_t)rand();
+    uint32_t isn = time_stamp ^ random_number;
+    return isn;
+}
+/*
  输入header所有字段 和 TCP包数据内容及其长度
  构造tju_packet_t
  返回其指针
