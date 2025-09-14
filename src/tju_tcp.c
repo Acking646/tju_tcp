@@ -130,6 +130,7 @@ int tju_connect(tju_tcp_t *sock, tju_sock_addr target_addr)
     char *msg = create_packet_buf(sock->established_local_addr.port, target_addr.port, 1, 0, DEFAULT_HEADER_LEN, DEFAULT_HEADER_LEN, SYN_FLAG_MASK, 1, 0, NULL, 0);
     sendToLayer3(msg, DEFAULT_HEADER_LEN);
 
+    _debug_("client SYN sent!");
     sock->state = SYN_SENT;
 
     while (sock->state != ESTABLISHED)
@@ -200,7 +201,7 @@ int tju_recv(tju_tcp_t *sock, void *buffer, int len)
 int tju_handle_packet(tju_tcp_t *sock, char *pkt)
 {
 
-    // printf("tju_handle_packet\n");
+    _debug_("tju_handle_packet\n");
     uint32_t data_len = get_plen(pkt) - DEFAULT_HEADER_LEN;
     uint8_t flag = get_flags(pkt);
     uint32_t seq = get_seq(pkt);
