@@ -1,4 +1,4 @@
-BUILD_DIR = ../build
+BUILD_DIR = ../build #设置变量 BUILD_DIR 指向上一级目录的 build 文件夹，用于存放编译产生的目标文件
 OBJS = $(BUILD_DIR)/tju_packet.o \
 	   $(BUILD_DIR)/kernel.o \
 	   $(BUILD_DIR)/tju_tcp.o \
@@ -6,6 +6,13 @@ OBJS = $(BUILD_DIR)/tju_packet.o \
 	#    $(BUILD_DIR)/SKB.o \
 	#    $(BUILD_DIR)/debug.o 
 
+# -pthread：链接 pthread 线程库
+# -g -ggdb：生成调试信息，支持 GDB 调试
+# -DDEBUG：定义 DEBUG 宏，启用调试模式
+# -I../inc：包含头文件目录
+# ./test_client.c：源文件
+# -o test_client：输出文件名
+# $(OBJS)：链接之前编译的目标文件
 
 default:all
 
