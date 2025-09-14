@@ -1,9 +1,9 @@
-[1;34m [INFO] [0mstartSimulation on hostname: client
+[1;34m [INFO] [2025-09-14 21:06:21] [0mstartSimulation on hostname: client 
 receive_thread:received a packet
-[1;91m [DEBUG] [0mclient: SYN_ACK received!
+[1;91m [DEBUG] [2025-09-14 21:06:21] [0mclient: SYN_ACK received! 
 [断开连接测试-客户端] 调用 tju_close
-[1;91m [DEBUG] [0mclient FIN sent! sock state -> FIN_WAIT_1
+[1;91m [DEBUG] [2025-09-14 21:06:22] [0mclient FIN sent! sock state -> FIN_WAIT_1 
 [断开连接测试-客户端] 等待10s确保连接完全断开
 receive_thread:received a packet
-[1;91m [DEBUG] [0mclient sock state -> TIME_WAIT
+[1;91m [DEBUG] [2025-09-14 21:06:22] [0mclient sock state -> TIME_WAIT 
 receive_thread:received a packet
