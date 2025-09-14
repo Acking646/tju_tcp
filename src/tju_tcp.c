@@ -60,7 +60,7 @@ int tju_listen(tju_tcp_t *sock)
 */
 tju_tcp_t *tju_accept(tju_tcp_t *listen_sock)
 {
-    while (listen_sock->stata != SYN_RECV)
+    while (listen_sock->state != SYN_RECV)
         ; // 阻塞 直到有SYN_RECV的socket
 
     tju_tcp_t *new_conn = (tju_tcp_t *)malloc(sizeof(tju_tcp_t));
@@ -197,7 +197,7 @@ int tju_recv(tju_tcp_t *sock, void *buffer, int len)
 int tju_handle_packet(tju_tcp_t *sock, char *pkt)
 {
 
-    print("tju_handle_packet\n");
+    printf("tju_handle_packet\n");
     uint32_t data_len = get_plen(pkt) - DEFAULT_HEADER_LEN;
     uint8_t flag = get_flags(pkt);
     uint32_t seq = get_seq(pkt);
@@ -227,12 +227,13 @@ int tju_handle_packet(tju_tcp_t *sock, char *pkt)
 
     switch (sock->state)
     {
-    case LISTEN;
-        if(flag==SYN_FLAG_MASK){
-            printf("SYN_FLAG RECEIVED : %d\n",flag);
-            sock->state=SYN_RECV;
-            sock->state=SYN_RECV;
-            char *pkt=create_packet_buf(dst_port,src_port,ack+1,seq+1,DEFAULT_HEADER_LEN,DEFAULT_HEADER_LEN,SYN_FLAG_MASK | ACK_FLAG_MASK, 1, 0, NULL, 0);
+    case LISTEN:
+        if (flag == SYN_FLAG_MASK)
+        {
+            printf("SYN_FLAG RECEIVED : %d\n", flag);
+            sock->state = SYN_RECV;
+            sock->state = SYN_RECV;
+            char *pkt = create_packet_buf(dst_port, src_port, ack + 1, seq + 1, DEFAULT_HEADER_LEN, DEFAULT_HEADER_LEN, SYN_FLAG_MASK | ACK_FLAG_MASK, 1, 0, NULL, 0);
             sendToLayer3(pkt, strlen(pkt));
         }
         break;

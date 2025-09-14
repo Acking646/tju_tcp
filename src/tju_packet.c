@@ -6,7 +6,7 @@
 uint32_t isn_gen()
 {
     // 获取当前时间戳
-    unit32_t time_stamp = (uint32_t)time(NULL);
+    uint32_t time_stamp = (uint32_t)time(NULL);
     // 获取一个随机数
     uint32_t random_number = (uint32_t)rand();
     uint32_t isn = time_stamp ^ random_number;

@@ -108,9 +108,9 @@ void *receive_thread(void *arg)
 
     while (1)
     {
-        print("working\n")
-            // MSG_PEEK 表示看一眼 不会把数据从缓冲区删除
-            len = recvfrom(BACKEND_UDPSOCKET_ID, hdr, DEFAULT_HEADER_LEN, MSG_PEEK, (struct sockaddr *)&from_addr, &from_addr_size);
+        printf("working\n");
+        // MSG_PEEK 表示看一眼 不会把数据从缓冲区删除
+        len = recvfrom(BACKEND_UDPSOCKET_ID, hdr, DEFAULT_HEADER_LEN, MSG_PEEK, (struct sockaddr *)&from_addr, &from_addr_size);
         // 一旦收到了大于header长度的数据 则接受整个TCP包
         if (len >= DEFAULT_HEADER_LEN)
         {
