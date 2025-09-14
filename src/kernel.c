@@ -4,7 +4,7 @@
 */
 void onTCPPocket(char *pkt)
 {
-    printf("onTCPPocket\n"); // 调试输出
+    // printf("onTCPPocket\n"); // 调试输出
     // 当我们收到TCP包时 包中 源IP 源端口 是发送方的 也就是我们眼里的 远程(remote) IP和端口
     uint16_t remote_port = get_src(pkt);
     uint16_t local_port = get_dst(pkt);
@@ -44,7 +44,7 @@ void onTCPPocket(char *pkt)
     }
 
     // 都没找到 丢掉数据包
-    printf("找不到能够处理该TCP数据包的socket, 丢弃该数据包\n");
+    // printf("找不到能够处理该TCP数据包的socket, 丢弃该数据包\n");
     return;
 }
 
@@ -108,7 +108,7 @@ void *receive_thread(void *arg)
 
     while (1)
     {
-        printf("working\n");
+        // printf("working\n");
         // MSG_PEEK 表示看一眼 不会把数据从缓冲区删除
         len = recvfrom(BACKEND_UDPSOCKET_ID, hdr, DEFAULT_HEADER_LEN, MSG_PEEK, (struct sockaddr *)&from_addr, &from_addr_size);
         // 一旦收到了大于header长度的数据 则接受整个TCP包
