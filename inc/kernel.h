@@ -10,8 +10,15 @@
 #define MAX_SOCK 32
 tju_tcp_t *listen_socks[MAX_SOCK];
 tju_tcp_t *established_socks[MAX_SOCK];
-tju_tcp_t *accept_queue[MAX_SOCK];
-int accept_queue_num;
+typedef struct
+{
+  tju_tcp_t *data[MAX_SOCK]; // 存放队列元素的数组
+  int front;                 // 指向队首的索引
+  int rear;                  // 指向队尾的索引
+  int size;                  // 队列当前的元素数量
+} queue;
+
+queue accept_queue;
 
 /*
 模拟Linux内核收到一份TCP报文的处理函数
@@ -49,5 +56,26 @@ int BACKEND_UDPSOCKET_ID;
 int cal_hash(uint32_t local_ip, uint16_t local_port, uint32_t remote_ip, uint16_t remote_port);
 
 const char *intToIp(uint32_t ip);
+
+// 用于将IP地址转换为字符串
+const char *intToIp(uint32_t ip);
+
+// 初始化server接收连接队列
+void initQueue(queue *q);
+
+// 检查队列是否为空
+int isEmpty(queue *q);
+
+// 检查队列是否已满
+int isFull(queue *q);
+
+// 元素加入队列
+void enqueue(queue *q, tju_tcp_t *value);
+
+// 元素出队列
+tju_tcp_t *dequeue(queue *q);
+
+// 获取队首元素但不出队
+tju_tcp_t *peek(queue *q);
 
 #endif

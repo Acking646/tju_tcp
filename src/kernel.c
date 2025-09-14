@@ -1,4 +1,5 @@
 #include "kernel.h"
+#include "stdio.h"
 /*
 模拟Linux内核收到一份TCP报文的处理函数
 */
@@ -211,4 +212,63 @@ const char *intToIp(uint32_t ip)
              (ip >> 8) & 0xFF,  // 取次低的8位
              ip & 0xFF);        // 取最低的8位
     return ipStr;
+}
+
+void initQueue(queue *q)
+{
+    q->front = 0;
+    q->rear = -1;
+    q->size = 0;
+}
+
+// 检查队列是否为空
+int isEmpty(queue *q)
+{
+    return q->size == 0;
+}
+
+// 检查队列是否已满
+int isFull(queue *q)
+{
+    return q->size == MAX_SOCK;
+}
+
+// 入队操作
+void enqueue(queue *q, tju_tcp_t *value)
+{
+    if (isFull(q))
+    {
+        printf("Queue is full\n");
+        return;
+    }
+
+    q->rear = (q->rear + 1) % MAX_SOCK;
+    q->data[q->rear] = value;
+    q->size++;
+}
+
+// 出队操作
+tju_tcp_t *dequeue(queue *q)
+{
+    if (isEmpty(q))
+    {
+        printf("Queue is empty\n");
+        return NULL;
+    }
+
+    tju_tcp_t *value = q->data[q->front];
+    q->front = (q->front + 1) % MAX_SOCK;
+    q->size--;
+    return value;
+}
+
+// 获取队首元素但不出队
+tju_tcp_t *peek(queue *q)
+{
+    if (isEmpty(q))
+    {
+        printf("Queue is empty\n");
+        return NULL;
+    }
+    return q->data[q->front];
 }
