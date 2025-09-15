@@ -16,13 +16,13 @@ void onTCPPocket(char *pkt)
     uint32_t remote_ip, local_ip;
     if (strcmp(hostname, "server") == 0)
     { // 自己是服务端 远端就是客户端
-        local_ip = inet_network(SERVER_IP);
-        remote_ip = inet_network(CLIENT_IP);
+        local_ip = inet_network("172.17.0.3");
+        remote_ip = inet_network("172.17.0.2");
     }
     else if (strcmp(hostname, "client") == 0)
     { // 自己是客户端 远端就是服务端
-        local_ip = inet_network(CLIENT_IP);
-        remote_ip = inet_network(SERVER_IP);
+        local_ip = inet_network("172.17.0.2");
+        remote_ip = inet_network("172.17.0.3");
     }
 
     int hashval;
@@ -72,13 +72,13 @@ void sendToLayer3(char *packet_buf, int packet_len)
     int rst;
     if (strcmp(hostname, "server") == 0)
     {
-        conn.sin_addr.s_addr = inet_addr(CLIENT_IP);
+        conn.sin_addr.s_addr = inet_addr("172.17.0.2");
         // 负责把内存里的 TCP 报文直接通过 UDP 送出去
         rst = sendto(BACKEND_UDPSOCKET_ID, packet_buf, packet_len, 0, (struct sockaddr *)&conn, sizeof(conn));
     }
     else if (strcmp(hostname, "client") == 0)
     {
-        conn.sin_addr.s_addr = inet_addr(SERVER_IP);
+        conn.sin_addr.s_addr = inet_addr("172.17.0.3");
         rst = sendto(BACKEND_UDPSOCKET_ID, packet_buf, packet_len, 0, (struct sockaddr *)&conn, sizeof(conn));
     }
     else
