@@ -116,7 +116,7 @@ int tju_connect(tju_tcp_t *sock, tju_sock_addr target_addr)
     sock->established_remote_addr = target_addr;
 
     tju_sock_addr local_addr;
-    local_addr.ip = inet_network("172.17.0.2");
+    local_addr.ip = inet_network(CLIENT_IP);
     local_addr.port = 5678; // 连接方进行connect连接的时候 内核中是随机分配一个可用的端口
     sock->established_local_addr = local_addr;
     // 将建立了连接的socket放入内核 已建立连接哈希表中
@@ -265,7 +265,7 @@ int tju_handle_packet(tju_tcp_t *sock, char *pkt)
 
             tju_sock_addr local_addr, remote_addr;
 
-            remote_addr.ip = inet_network("172.17.0.2");
+            remote_addr.ip = inet_network(CLIENT_IP);
             remote_addr.port = src_port;
 
             local_addr.ip = sock->bind_addr.ip;
@@ -274,9 +274,9 @@ int tju_handle_packet(tju_tcp_t *sock, char *pkt)
             new_conn->established_local_addr = local_addr;
             new_conn->established_remote_addr = remote_addr;
 
-            pthread_mutex_lock(&(sock->state_lock));
+            pthread_mutex_lock(&(new_conn->state_lock));
             new_conn->state = ESTABLISHED;
-            pthread_mutex_unlock(&(sock->state_lock));
+            pthread_mutex_unlock(&(new_conn->state_lock));
 
             int hashval = cal_hash(local_addr.ip, local_addr.port, remote_addr.ip, remote_addr.port);
             established_socks[hashval] = new_conn;
