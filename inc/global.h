@@ -16,8 +16,8 @@
 #include <sys/select.h>
 #include <arpa/inet.h>
 
-#define SERVER_IP "172.17.0.6"
-#define CLIENT_IP "172.17.0.5"
+#define SERVER_IP "172.17.0.3"
+#define CLIENT_IP "172.17.0.2"
 
 // 单位是byte
 #define SIZE32 4
