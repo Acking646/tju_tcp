@@ -7,19 +7,37 @@
 
 #include <stdio.h>
 #include <time.h>
+#include <sys/time.h>
+
+static inline void get_formatted_time(char *buffer, size_t buffer_size, int include_microseconds)
+{
+    // time_t      tv_sec;   /* 自 1970-01-01 00:00:00 +0000 (UTC) 的秒数 */
+    // suseconds_t tv_usec; /* 微秒 (0-999999) */
+    struct timeval tv;
+    struct tm *timeinfo;
+
+    // gettimeofday 拿到 秒 + 微秒。localtime 把秒转成日历时间。
+    gettimeofday(&tv, NULL);
+    timeinfo = localtime(&tv.tv_sec);
+
+    if (include_microseconds)
+    {
+        strftime(buffer, buffer_size, "%Y-%m-%d %H:%M:%S", timeinfo);  // 拼日期+时间字符串
+        snprintf(buffer + 19, buffer_size - 19, ".%06ld", tv.tv_usec); // 追加微秒
+    }
+    else
+    {
+        strftime(buffer, buffer_size, "%Y-%m-%d %H:%M:%S", timeinfo);
+    }
+}
 
 #define _info_(format, ...)                                                             \
     do                                                                                  \
     {                                                                                   \
         if (INFO_FLAG)                                                                  \
         {                                                                               \
-            time_t rawtime;                                                             \
-            struct tm *timeinfo;                                                        \
-            char buffer[20];                                                            \
-            time(&rawtime);                                                             \
-            rawtime += 8 * 3600;                                                        \
-            timeinfo = localtime(&rawtime);                                             \
-            strftime(buffer, 20, "%Y-%m-%d %H:%M:%S", timeinfo);                        \
+            char buffer[40];                                                            \
+            get_formatted_time(buffer, sizeof(buffer), 1);                              \
             printf("\33[1;34m [INFO] [%s] \33[0m" format " \n", buffer, ##__VA_ARGS__); \
         }                                                                               \
     } while (0)
@@ -29,13 +47,8 @@
     {                                                                                  \
         if (MSG_FLAG)                                                                  \
         {                                                                              \
-            time_t rawtime;                                                            \
-            struct tm *timeinfo;                                                       \
-            char buffer[20];                                                           \
-            time(&rawtime);                                                            \
-            rawtime += 8 * 3600;                                                       \
-            timeinfo = localtime(&rawtime);                                            \
-            strftime(buffer, 20, "%Y-%m-%d %H:%M:%S", timeinfo);                       \
+            char buffer[40]; /* Increased buffer size to 40 */                         \
+            get_formatted_time(buffer, sizeof(buffer), 1);                             \
             printf("\33[1;32m [MSG] [%s] \33[0m" format " \n", buffer, ##__VA_ARGS__); \
         }                                                                              \
     } while (0)
@@ -45,17 +58,12 @@
     {                                                                                    \
         if (DEBUG_FLAG)                                                                  \
         {                                                                                \
-            time_t rawtime;                                                              \
-            struct tm *timeinfo;                                                         \
-            char buffer[20];                                                             \
-            time(&rawtime);                                                              \
-            rawtime += 8 * 3600;                                                         \
-            timeinfo = localtime(&rawtime);                                              \
-            strftime(buffer, 20, "%Y-%m-%d %H:%M:%S", timeinfo);                         \
+            char buffer[40];                                                             \
+            get_formatted_time(buffer, sizeof(buffer), 1);                               \
             printf("\33[1;91m [DEBUG] [%s] \33[0m" format " \n", buffer, ##__VA_ARGS__); \
         }                                                                                \
     } while (0)
-
+/* TCP 状态字符串化 */
 #define STATE_TO_STRING(state)                \
     ((state) == CLOSED        ? "CLOSED"      \
      : (state) == LISTEN      ? "LISTEN"      \
