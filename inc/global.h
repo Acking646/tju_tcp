@@ -15,6 +15,7 @@
 #include <pthread.h>
 #include <sys/select.h>
 #include <arpa/inet.h>
+#include "trace.h"
 
 #define SERVER_IP "172.17.0.3"
 #define CLIENT_IP "172.17.0.2"
@@ -131,6 +132,8 @@ typedef struct
 	pthread_cond_t wait_cond; // 可以被用来唤醒recv函数调用时等待的线程
 
 	window_t window; // 发送和接受窗口
+
+	FILE *file;
 
 } tju_tcp_t;
 

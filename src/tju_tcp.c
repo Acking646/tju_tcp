@@ -9,6 +9,28 @@ tju_tcp_t *tju_socket()
 {
     tju_tcp_t *sock = (tju_tcp_t *)malloc(sizeof(tju_tcp_t)); // 显示类型转换
     sock->state = CLOSED;
+    char hostname[8];
+    gethostname(hostname, 8);
+    if (strcmp(hostname, "server") == 0)
+    {
+        sock->file = fopen("server.trace.log", "w");
+        if (sock->file == NULL)
+        {
+            perror("Failed to open file");
+        }
+    }
+    else if (strcmp(hostname, "client") == 0)
+    {
+        sock->file = fopen("client.trace.log", "w");
+        if (sock->file == NULL)
+        {
+            perror("Failed to open file");
+        }
+    }
+    log_event(sock->file, "SEND", "seq:%d ack:%d flag:%d length:%d", 33, 66, 0, 111);
+    log_event(sock->file, "SEND", "seq:%d ack:%d flag:%d length:%d", 33, 66, 0, 111);
+    log_event(sock->file, "SEND", "seq:%d ack:%d flag:%d length:%d", 33, 66, 0, 111);
+
     pthread_mutex_init(&(sock->state_lock), NULL);
 
     pthread_mutex_init(&(sock->send_lock), NULL);
