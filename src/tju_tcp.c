@@ -329,6 +329,7 @@ int tju_handle_packet(tju_tcp_t *sock, char *pkt)
             sock->state = FIN_WAIT_2;
             pthread_mutex_unlock(&(sock->state_lock));
         }
+        // 双方同时断开
         else if (flag == FIN_FLAG_MASK | ACK_FLAG_MASK)
         {
             // 发送ACK
@@ -343,6 +344,7 @@ int tju_handle_packet(tju_tcp_t *sock, char *pkt)
             sock->state = CLOSING;
             pthread_mutex_unlock(&(sock->state_lock));
         }
+        // 一方先断开
         else if (flag == FIN_FLAG_MASK | ACK_FLAG_MASK)
         {
             _debug_("client FINACK received! sock state -> TIME_WAIT");

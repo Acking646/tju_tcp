@@ -7,3 +7,8 @@ void initTimer(tju_tcp_t *sock)
     {
     }
 }
+
+void sendwithretransmit(tju_tcp_t *sock, char *package_buf, int package_len)
+{
+    gettimeofday(&nowtime, NULL);
+}
