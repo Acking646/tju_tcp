@@ -62,8 +62,9 @@
 typedef struct
 {
 	char *pkt[MAX_PKG];
-	int send_time[MAX_PKG];
+	long send_time[MAX_PKG];
 	int count;
+	pthread_mutex_t send_list;
 } resend;
 
 // TCP 发送窗口

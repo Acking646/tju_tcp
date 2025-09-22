@@ -45,7 +45,7 @@ void onTCPPocket(char *pkt)
     }
 
     // 都没找到 丢掉数据包
-    // printf("找不到能够处理该TCP数据包的socket, 丢弃该数据包\n");
+    printf("找不到能够处理该TCP数据包的socket, 丢弃该数据包\n");
     return;
 }
 
@@ -169,20 +169,64 @@ void *send_thread(void *arg)
                     // 释放
                     free(pkt);
                     free(msg);
-
-                    // 释放发送缓存区
                     char *new_buf = malloc(sock->sending_len - len);
                     memcpy(new_buf, sock->sending_buf + len, sock->sending_len - len);
                     free(sock->sending_buf);
                     sock->sending_buf = new_buf;
                     sock->sending_len -= len;
-
                     _debug_("send a packet: len = %d", len);
                 }
 
                 pthread_mutex_unlock(&(sock->send_lock)); // 解锁
             }
         }
+
+        // for (int i = 0; i < MAX_SOCK; i++)
+        // {
+        // 	if (established_socks[i] != NULL)
+        // 	{
+        // 		tju_tcp_t *sock = established_socks[i];
+        // 		for (int i = 0; i < MAX_PKG; i++)
+        // 		{
+        // 			// pthread_mutex_lock(&(sock->resend_list->send_list));
+        // 			if (sock->resend_list->pkt[i] == NULL)
+        // 			{
+        // 				continue;
+        // 			}
+        // 			if (getCurrentTime() - sock->resend_list->send_time[i] > 1000000)
+        // 			{
+        // 				sendToLayer3(sock->resend_list->pkt[i], get_plen(sock->resend_list->pkt[i]));
+        // 				sock->resend_list->send_time[i] = getCurrentTime();
+        // 				_debug_("resend a packet");
+        // 			}
+        // 			// pthread_mutex_unlock(&(sock->resend_list->send_list));
+        // 			sleep(1);
+        // 		}
+        // 	}
+        // }
+        // for (int i = 0; i < MAX_SOCK; i++)
+        // {
+        // 	if (listen_socks[i] != NULL)
+        // 	{
+        // 		tju_tcp_t *sock = listen_socks[i];
+        // 		for (int i = 0; i < MAX_PKG; i++)
+        // 		{
+        // 			// pthread_mutex_lock(&(sock->resend_list->send_list));
+        // 			if (sock->resend_list->pkt[i] == NULL)
+        // 			{
+        // 				continue;
+        // 			}
+        // 			if (getCurrentTime() - sock->resend_list->send_time[i] > 1000000)
+        // 			{
+        // 				sendToLayer3(sock->resend_list->pkt[i], get_plen(sock->resend_list->pkt[i]));
+        // 				sock->resend_list->send_time[i] = getCurrentTime();
+        // 				_debug_("resend a packet");
+        // 			}
+        // 			// pthread_mutex_unlock(&(sock->resend_list->send_list));
+        // 			sleep(1);
+        // 		}
+        // 	}
+        // }
     }
 }
 
@@ -344,7 +388,7 @@ void send_pkt(tju_tcp_t *sock, char *pkt, int len)
     sendToLayer3(pkt, len);
     log_event(sock->file, "SEND", "seq:%d ack:%d flag:%d length:%d", get_seq(pkt), get_ack(pkt), get_flags(pkt),
               get_plen(pkt) - DEFAULT_HEADER_LEN);
-    sock->window.wnd_send->nextseq += len == DEFAULT_HEADER_LEN ? 1 : get_plen(pkt) - DEFAULT_HEADER_LEN;
+    sock->window.wnd_send->nextseq += len == DEFAULT_HEADER_LEN ? 1 : len - DEFAULT_HEADER_LEN;
 
     if (sock->resend_list->count == MAX_PKG)
     {
@@ -356,9 +400,18 @@ void send_pkt(tju_tcp_t *sock, char *pkt, int len)
     {
         i++;
     }
-    sock->resend_list->pkt[i] = pkt;
+
+    // if(get_flags(pkt) == ACK_FLAG_MASK){
+    // 	_debug_("byebye");
+    // 	return;
+    // }
+
+    pthread_mutex_lock(&(sock->resend_list->send_list));
+    sock->resend_list->pkt[i] = malloc(len);
+    memcpy(sock->resend_list->pkt[i], pkt, len);
     sock->resend_list->send_time[i] = getCurrentTime();
     sock->resend_list->count++;
+    pthread_mutex_unlock(&(sock->resend_list->send_list));
 
     _info_("add a packet to resend list, count = %d", sock->resend_list->count);
 }
