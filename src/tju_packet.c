@@ -5,12 +5,11 @@
 */
 uint32_t isn_gen()
 {
-    // 获取当前时间戳
-    uint32_t time_stamp = (uint32_t)time(NULL);
-    // 获取一个随机数
-    uint32_t random_number = (uint32_t)rand();
-    uint32_t isn = time_stamp ^ random_number;
-    return isn % 1024;
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    srand(tv.tv_usec); // Use microseconds to ensure different seeds
+    uint32_t isn = (uint32_t)rand();
+    return isn % 4096;
 }
 /*
  输入header所有字段 和 TCP包数据内容及其长度

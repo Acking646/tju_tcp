@@ -30,6 +30,8 @@ tju_tcp_t *tju_socket()
 
     // 初始化发送窗口
     sock->window.wnd_send = (sender_window_t *)malloc(sizeof(sender_window_t));
+    sock->window.wnd_recv = (receiver_window_t *)malloc(sizeof(receiver_window_t));
+    sock->window.wnd_recv->expect_seq = 0;
     // sock->window.wnd_send->window_size = 0;
     sock->window.wnd_send->base = isn_gen();
     sock->window.wnd_send->nextseq = sock->window.wnd_send->base;
@@ -46,7 +48,6 @@ tju_tcp_t *tju_socket()
     // sock->window.wnd_send->ssthresh = 16;
 
     pthread_mutex_init(&(sock->state_lock), NULL);
-
     pthread_mutex_init(&(sock->send_lock), NULL);
     sock->sending_buf = NULL;
     sock->sending_len = 0;
@@ -60,9 +61,6 @@ tju_tcp_t *tju_socket()
         perror("ERROR condition variable not set\n");
         exit(-1);
     }
-
-    sock->window.wnd_send = NULL;
-    sock->window.wnd_recv = NULL;
 
     return sock;
 }
@@ -147,9 +145,6 @@ int tju_connect(tju_tcp_t *sock, tju_sock_addr target_addr)
 
 int tju_send(tju_tcp_t *sock, const void *buffer, int len)
 {
-    // 这里当然不能直接简单地调用sendToLayer3
-    char *data = malloc(len);
-    memcpy(data, buffer, len);
     while (pthread_mutex_lock(&(sock->send_lock)) != 0)
         ; // 加锁
 
@@ -224,6 +219,21 @@ int tju_handle_packet(tju_tcp_t *sock, char *pkt)
     tju_tcp_t *new_conn = NULL;
 
     log_event(sock->file, "RECV", "seq:%d ack:%d flag:%d length:%d", seq, ack, flag, data_len);
+    if (sock->window.wnd_recv->expect_seq == 0)
+    {
+        sock->window.wnd_recv->expect_seq = seq + ((data_len == 0) ? 1 : data_len);
+    }
+    else
+    {
+        if (sock->window.wnd_recv->expect_seq != seq)
+        {
+            _debug_("seq error! expect_seq = %d, seq = %d", sock->window.wnd_recv->expect_seq, seq);
+        }
+        else
+        {
+            sock->window.wnd_recv->expect_seq += (data_len == 0) ? 1 : data_len;
+        }
+    }
 
     _debug_("data_len = %d", data_len);
 
@@ -261,8 +271,8 @@ int tju_handle_packet(tju_tcp_t *sock, char *pkt)
             pthread_mutex_unlock(&(sock->state_lock));
 
             char *pkt =
-                create_packet_buf(dst_port, src_port, sock->window.wnd_send->nextseq, seq + 1, DEFAULT_HEADER_LEN,
-                                  DEFAULT_HEADER_LEN, SYN_FLAG_MASK | ACK_FLAG_MASK, 1, 0, NULL, 0);
+                create_packet_buf(dst_port, src_port, sock->window.wnd_send->nextseq, sock->window.wnd_recv->expect_seq,
+                                  DEFAULT_HEADER_LEN, DEFAULT_HEADER_LEN, SYN_FLAG_MASK | ACK_FLAG_MASK, 1, 0, NULL, 0);
             send_pkt(sock, pkt, DEFAULT_HEADER_LEN);
         }
         break;
@@ -270,8 +280,9 @@ int tju_handle_packet(tju_tcp_t *sock, char *pkt)
         if (flag == SYN_FLAG_MASK | ACK_FLAG_MASK)
         {
             _debug_("client: SYN_ACK received!");
-            char *pkt = create_packet_buf(dst_port, src_port, sock->window.wnd_send->nextseq, seq + 1,
-                                          DEFAULT_HEADER_LEN, DEFAULT_HEADER_LEN, ACK_FLAG_MASK, 1, 0, NULL, 0);
+            char *pkt =
+                create_packet_buf(dst_port, src_port, sock->window.wnd_send->nextseq, sock->window.wnd_recv->expect_seq,
+                                  DEFAULT_HEADER_LEN, DEFAULT_HEADER_LEN, ACK_FLAG_MASK, 1, 0, NULL, 0);
             send_pkt(sock, pkt, DEFAULT_HEADER_LEN);
             pthread_mutex_lock(&(sock->state_lock));
             sock->state = ESTABLISHED;
@@ -317,7 +328,7 @@ int tju_handle_packet(tju_tcp_t *sock, char *pkt)
             _debug_("FIN received! sock state -> CLOSE_WAIT");
             // 创建ACK包响应FIN
             char *pkt = create_packet_buf(sock->established_local_addr.port, sock->established_remote_addr.port,
-                                          sock->window.wnd_send->nextseq, seq + 1, DEFAULT_HEADER_LEN,
+                                          sock->window.wnd_send->nextseq, sock->window.wnd_recv->expect_seq, DEFAULT_HEADER_LEN,
                                           DEFAULT_HEADER_LEN, ACK_FLAG_MASK, 1, 0, NULL, 0);
             send_pkt(sock, pkt, DEFAULT_HEADER_LEN);
             _debug_("ACK sent!");
@@ -330,8 +341,8 @@ int tju_handle_packet(tju_tcp_t *sock, char *pkt)
             sleep(1);
             // 应用进程关闭，发送FIN
             pkt = create_packet_buf(sock->established_local_addr.port, sock->established_remote_addr.port,
-                                    sock->window.wnd_send->nextseq, seq + 1, DEFAULT_HEADER_LEN, DEFAULT_HEADER_LEN,
-                                    FIN_FLAG_MASK | ACK_FLAG_MASK, 1, 0, NULL, 0);
+                                    sock->window.wnd_send->nextseq, sock->window.wnd_recv->expect_seq, DEFAULT_HEADER_LEN,
+                                    DEFAULT_HEADER_LEN, FIN_FLAG_MASK | ACK_FLAG_MASK, 1, 0, NULL, 0);
             send_pkt(sock, pkt, DEFAULT_HEADER_LEN);
             _debug_("FIN sent! sock state -> LAST_ACK");
             pthread_mutex_lock(&(sock->state_lock));
@@ -343,13 +354,13 @@ int tju_handle_packet(tju_tcp_t *sock, char *pkt)
         {
             if (flag == ACK_FLAG_MASK)
             {
-                sock->window.wnd_send->base = ack;
+                // 释放发送缓存区的部分空间
             }
             if (sock->received_buf == NULL)
             {
                 // 发ack
                 char *pkt = create_packet_buf(sock->established_local_addr.port, sock->established_remote_addr.port,
-                                              sock->window.wnd_send->nextseq, seq + 1, DEFAULT_HEADER_LEN,
+                                              sock->window.wnd_send->nextseq, sock->window.wnd_recv->expect_seq, DEFAULT_HEADER_LEN,
                                               DEFAULT_HEADER_LEN, ACK_FLAG_MASK, 1, 0, NULL, 0);
                 send_pkt(sock, pkt, DEFAULT_HEADER_LEN);
             }
@@ -372,7 +383,7 @@ int tju_handle_packet(tju_tcp_t *sock, char *pkt)
             _debug_("FIN received! sock state -> CLOSING");
 
             char *pkt = create_packet_buf(sock->established_local_addr.port, sock->established_remote_addr.port,
-                                          sock->window.wnd_send->nextseq, seq + 1, DEFAULT_HEADER_LEN,
+                                          sock->window.wnd_send->nextseq, sock->window.wnd_recv->expect_seq, DEFAULT_HEADER_LEN,
                                           DEFAULT_HEADER_LEN, ACK_FLAG_MASK, 1, 0, NULL, 0);
             send_pkt(sock, pkt, DEFAULT_HEADER_LEN);
 
@@ -385,7 +396,7 @@ int tju_handle_packet(tju_tcp_t *sock, char *pkt)
         {
             _debug_("client FINACK received! sock state -> TIME_WAIT");
             char *pkt = create_packet_buf(sock->established_local_addr.port, sock->established_remote_addr.port,
-                                          sock->window.wnd_send->nextseq, seq + 1, DEFAULT_HEADER_LEN,
+                                          sock->window.wnd_send->nextseq, sock->window.wnd_recv->expect_seq, DEFAULT_HEADER_LEN,
                                           DEFAULT_HEADER_LEN, ACK_FLAG_MASK, 1, 0, NULL, 0);
             send_pkt(sock, pkt, DEFAULT_HEADER_LEN);
 
@@ -408,7 +419,7 @@ int tju_handle_packet(tju_tcp_t *sock, char *pkt)
             pthread_mutex_unlock(&(sock->state_lock));
 
             char *pkt = create_packet_buf(sock->established_local_addr.port, sock->established_remote_addr.port,
-                                          sock->window.wnd_send->nextseq, seq + 1, DEFAULT_HEADER_LEN,
+                                          sock->window.wnd_send->nextseq, sock->window.wnd_recv->expect_seq, DEFAULT_HEADER_LEN,
                                           DEFAULT_HEADER_LEN, ACK_FLAG_MASK, 1, 0, NULL, 0);
             send_pkt(sock, pkt, DEFAULT_HEADER_LEN);
             _debug_("client ACK sent!");
@@ -449,7 +460,7 @@ int tju_close(tju_tcp_t *sock)
 {
     // client:状态为ESTABLISHED,发FIN报文，转为FIN_WAIT_1
     char *pkt = create_packet_buf(sock->established_local_addr.port, sock->established_remote_addr.port,
-                                  sock->window.wnd_send->nextseq, 1 + 1, DEFAULT_HEADER_LEN, DEFAULT_HEADER_LEN,
+                                  sock->window.wnd_send->nextseq, sock->window.wnd_recv->expect_seq, DEFAULT_HEADER_LEN, DEFAULT_HEADER_LEN,
                                   FIN_FLAG_MASK | ACK_FLAG_MASK, 1, 0, NULL, 0);
     send_pkt(sock, pkt, DEFAULT_HEADER_LEN);
 
