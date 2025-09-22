@@ -59,6 +59,13 @@
 // TCP 接受窗口大小
 #define TCP_RECVWN_SIZE (MAX_PKG * MAX_DLEN) // 比如最多放32个满载数据包
 
+typedef struct
+{
+	char *pkt[MAX_PKG];
+	int send_time[MAX_PKG];
+	int count;
+} resend;
+
 // TCP 发送窗口
 // 注释的内容如果想用就可以用 不想用就删掉 仅仅提供思路和灵感
 typedef struct
@@ -83,7 +90,7 @@ typedef struct
 typedef struct
 {
 	// char received[TCP_RECVWN_SIZE];
-	// //   received_packet_t* head;
+	// received_packet_t* head;
 	// char buf[TCP_RECVWN_SIZE];
 	// uint8_t marked[TCP_RECVWN_SIZE];
 	uint32_t expect_seq;
@@ -124,7 +131,9 @@ typedef struct
 
 	window_t window; // 发送和接受窗口
 
-	FILE *file;
+	resend *resend_list; // 重传列表
+
+	FILE *file; // trace文件
 
 } tju_tcp_t;
 
