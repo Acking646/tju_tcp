@@ -38,6 +38,17 @@ int main(int argc, char **argv)
     tju_recv(my_socket, (void *)buf, 10);
     _msg_("recv: %s", buf);
 
+    sleep(2);
+
+    tju_send(my_socket, "hello world", 12);
+    tju_send(my_socket, "hello tju", 10);
+
+    tju_recv(my_socket, (void *)buf, 12);
+    _msg_("recv: %s", buf);
+
+    tju_recv(my_socket, (void *)buf, 10);
+    _msg_("recv: %s", buf);
+
     tju_close(my_socket);
 
     _debug_("client CLOSED");
