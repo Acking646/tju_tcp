@@ -10,7 +10,7 @@ uint32_t isn_gen()
     // 获取一个随机数
     uint32_t random_number = (uint32_t)rand();
     uint32_t isn = time_stamp ^ random_number;
-    return isn;
+    return isn % 1024;
 }
 /*
  输入header所有字段 和 TCP包数据内容及其长度
