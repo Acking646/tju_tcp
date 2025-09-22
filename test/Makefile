@@ -1,8 +1,8 @@
 BUILD_DIR = ../build
 OBJS = $(BUILD_DIR)/tju_packet.o \
 	   $(BUILD_DIR)/kernel.o \
+	   $(BUILD_DIR)/time_helper.o \
 	   $(BUILD_DIR)/tju_tcp.o \
-	#    $(BUILD_DIR)/timer.o \
 	#    $(BUILD_DIR)/SKB.o \
 	#    $(BUILD_DIR)/debug.o 
 

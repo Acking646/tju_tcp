@@ -14,12 +14,11 @@ void timer_start(void *arg)
             }
             if (getCurrentTime() - sock->resend_list->send_time[i] > 1000000)
             {
-                pthread_mutex_lock(&(sock->resend_list->send_list));
                 sock->resend_list->send_time[i] = getCurrentTime();
-                pthread_mutex_unlock(&(sock->resend_list->send_list));
                 sendToLayer3(sock->resend_list->pkt[i], get_plen(sock->resend_list->pkt[i]));
                 log_event(sock->file, "RESEND", "seq:%d", get_seq(sock->resend_list->pkt[i]));
             }
+            sleep(1);
         }
     }
 }

@@ -1,5 +1,4 @@
 #include "tju_tcp.h"
-
 /*
 创建 TCP socket
 初始化对应的结构体
@@ -109,7 +108,6 @@ int tju_listen(tju_tcp_t *sock)
 */
 tju_tcp_t *tju_accept(tju_tcp_t *listen_sock)
 {
-
     while (isEmpty(&accept_queue))
         ;
     tju_tcp_t *accepted_conn;
@@ -126,7 +124,6 @@ tju_tcp_t *tju_accept(tju_tcp_t *listen_sock)
 */
 int tju_connect(tju_tcp_t *sock, tju_sock_addr target_addr)
 {
-
     tju_sock_addr local_addr;
     local_addr.ip = inet_network(CLIENT_IP);
     local_addr.port = 5678; // 连接方进行connect连接的时候 内核中是随机分配一个可用的端口
@@ -157,7 +154,6 @@ int tju_send(tju_tcp_t *sock, const void *buffer, int len)
     while (pthread_mutex_lock(&(sock->send_lock)) != 0)
         ; // 加锁
 
-    // 发送缓冲区管理
     if (sock->sending_buf == NULL)
     {
         sock->sending_buf = malloc(len);
@@ -170,6 +166,7 @@ int tju_send(tju_tcp_t *sock, const void *buffer, int len)
     sock->sending_len += len;
 
     pthread_mutex_unlock(&(sock->send_lock)); // 解锁
+
     return 0;
 }
 
@@ -216,7 +213,6 @@ int tju_recv(tju_tcp_t *sock, void *buffer, int len)
 
 int tju_handle_packet(tju_tcp_t *sock, char *pkt)
 {
-
     _debug_("tju_handle_packet");
 
     uint32_t data_len = get_plen(pkt) - DEFAULT_HEADER_LEN;
@@ -262,7 +258,16 @@ int tju_handle_packet(tju_tcp_t *sock, char *pkt)
                 sock->window.wnd_send->ack_cnt++;
                 if (sock->window.wnd_send->ack_cnt == 3)
                 {
-                    // resend
+                    printf("3 duplicate acks\n");
+                    for (int i = 0; i < MAX_PKG; i++)
+                    {
+                        if (sock->resend_list->pkt[i] == NULL)
+                            continue;
+                        if (get_seq(sock->resend_list->pkt[i]) == ack)
+                        {
+                            sendToLayer3(sock->resend_list->pkt[i], get_plen(sock->resend_list->pkt[i]));
+                        }
+                    }
                 }
             }
         }
@@ -444,22 +449,22 @@ int tju_handle_packet(tju_tcp_t *sock, char *pkt)
     case FIN_WAIT_2:
         if (flag == (FIN_FLAG_MASK | ACK_FLAG_MASK))
         {
-            _debug_("FIN received! sock state -> TIME_WAIT");
-            pthread_mutex_lock(&(sock->state_lock));
-            sock->state = TIME_WAIT;
-            pthread_mutex_unlock(&(sock->state_lock));
 
+            _debug_("FIN received! sock state -> TIME_WAIT");
             char *pkt = create_packet_buf(sock->established_local_addr.port, sock->established_remote_addr.port,
                                           sock->window.wnd_send->nextseq, sock->window.wnd_recv->expect_seq,
                                           DEFAULT_HEADER_LEN, DEFAULT_HEADER_LEN, ACK_FLAG_MASK, 1, 0, NULL, 0);
             send_pkt(sock, pkt, DEFAULT_HEADER_LEN);
             _debug_("ACK sent!");
-
-            // 这里不清楚在等什么东西，状态转换图上有，但是还没看懂，就直接closed好了
-            _debug_("sock state -> CLOSED");
             pthread_mutex_lock(&(sock->state_lock));
-            sock->state = CLOSED;
+            sock->state = TIME_WAIT;
             pthread_mutex_unlock(&(sock->state_lock));
+
+            // //等待
+            // _debug_("sock state -> CLOSED");
+            // pthread_mutex_lock(&(sock->state_lock));
+            // sock->state = CLOSED;
+            // pthread_mutex_unlock(&(sock->state_lock));
         }
         break;
 
@@ -479,10 +484,6 @@ int tju_handle_packet(tju_tcp_t *sock, char *pkt)
             pthread_mutex_lock(&(sock->state_lock));
             sock->state = TIME_WAIT;
             pthread_mutex_unlock(&(sock->state_lock));
-
-            pthread_mutex_lock(&(sock->state_lock));
-            sock->state = CLOSED;
-            pthread_mutex_unlock(&(sock->state_lock));
         }
         break;
     }
@@ -492,17 +493,33 @@ int tju_handle_packet(tju_tcp_t *sock, char *pkt)
 
 int tju_close(tju_tcp_t *sock)
 {
-    // client:状态为ESTABLISHED,发FIN报文，转为FIN_WAIT_1
     char *pkt = create_packet_buf(sock->established_local_addr.port, sock->established_remote_addr.port,
                                   sock->window.wnd_send->nextseq, sock->window.wnd_recv->expect_seq, DEFAULT_HEADER_LEN,
                                   DEFAULT_HEADER_LEN, (FIN_FLAG_MASK | ACK_FLAG_MASK), 1, 0, NULL, 0);
     send_pkt(sock, pkt, DEFAULT_HEADER_LEN);
+    _msg_("send FIN");
 
-    pthread_mutex_lock(&(sock->state_lock));
-    sock->state = FIN_WAIT_1;
-    pthread_mutex_unlock(&(sock->state_lock));
+    if (sock->state == ESTABLISHED)
+    {
+        pthread_mutex_lock(&(sock->state_lock));
+        sock->state = FIN_WAIT_1;
+        pthread_mutex_unlock(&(sock->state_lock));
 
-    _debug_("FIN sent! sock state -> FIN_WAIT_1");
+        while (sock->state != TIME_WAIT)
+            // printf("sock state -> %s", STATE_TO_STRING(sock->state));
+            ;
+        sleep(2);
+
+        pthread_mutex_lock(&(sock->state_lock));
+        sock->state = CLOSED;
+        pthread_mutex_unlock(&(sock->state_lock));
+    }
+    else if (sock->state == CLOSE_WAIT)
+    {
+        pthread_mutex_lock(&(sock->state_lock));
+        sock->state = LAST_ACK;
+        pthread_mutex_unlock(&(sock->state_lock));
+    }
 
     while (sock->state != CLOSED)
         ;
