@@ -14,7 +14,7 @@ int main(int argc, char **argv) {
 
     tju_connect(my_socket, target_addr);
 
-    
+    sleep(5);
 
     return EXIT_SUCCESS;
 }

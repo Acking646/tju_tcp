@@ -449,8 +449,8 @@ int tju_close(tju_tcp_t *sock)
 {
     // client:状态为ESTABLISHED,发FIN报文，转为FIN_WAIT_1
     char *pkt = create_packet_buf(sock->established_local_addr.port, sock->established_remote_addr.port,
-                                  sock->window.wnd_send->nextseq, seq + 1, DEFAULT_HEADER_LEN,
-                                  DEFAULT_HEADER_LEN, ACK_FLAG_MASK, 1, 0, NULL, 0);
+                                  sock->window.wnd_send->nextseq, 1 + 1, DEFAULT_HEADER_LEN, DEFAULT_HEADER_LEN,
+                                  FIN_FLAG_MASK | ACK_FLAG_MASK, 1, 0, NULL, 0);
     send_pkt(sock, pkt, DEFAULT_HEADER_LEN);
 
     pthread_mutex_lock(&(sock->state_lock));
