@@ -158,11 +158,16 @@ void *send_thread(void *arg)
                     memcpy(pkt, sock->sending_buf, len);
 
                     // 组装 packet
-                    char *msg = create_packet_buf(sock->established_local_addr.port, sock->established_remote_addr.port, 1, 1 + 1,
-                                                  DEFAULT_HEADER_LEN, len + DEFAULT_HEADER_LEN, ACK_FLAG_MASK, 1, 0, pkt, len);
+                    char *msg = create_packet_buf(sock->established_local_addr.port, sock->established_remote_addr.port,
+                                                  sock->window.wnd_send->nextseq, 1 + 1, DEFAULT_HEADER_LEN,
+                                                  len + DEFAULT_HEADER_LEN, ACK_FLAG_MASK, 1, 0, pkt, len);
 
                     // 发送
                     sendToLayer3(msg, DEFAULT_HEADER_LEN + len);
+
+                    log_event(sock->file, "SEND", "seq:%d ack:%d flag:%d length:%d", get_seq(msg), get_ack(msg),
+                              get_flags(msg), get_plen(msg) - DEFAULT_HEADER_LEN);
+                    sock->window.wnd_send->nextseq += len;
 
                     // 释放
                     free(pkt);
@@ -335,4 +340,12 @@ tju_tcp_t *peek(queue *q)
         return NULL;
     }
     return q->data[q->front];
+}
+
+void send_pkt(tju_tcp_t *sock, char *pkt, int len)
+{
+    sendToLayer3(pkt, len);
+    log_event(sock->file, "SEND", "seq:%d ack:%d flag:%d length:%d", get_seq(pkt), get_ack(pkt), get_flags(pkt),
+              get_plen(pkt) - DEFAULT_HEADER_LEN);
+    sock->window.wnd_send->nextseq += len == DEFAULT_HEADER_LEN ? 1 : get_plen(pkt) - DEFAULT_HEADER_LEN;
 }

@@ -44,6 +44,17 @@ int main(int argc, char **argv)
     tju_recv(new_conn, (void *)buf, 10);
     _msg_("recv: %s", buf);
 
+    sleep(2);
+
+    tju_send(new_conn, "hello world", 12);
+    tju_send(new_conn, "hello tju", 10);
+
+    tju_recv(new_conn, (void *)buf, 12);
+    _msg_("recv: %s", buf);
+
+    tju_recv(new_conn, (void *)buf, 10);
+    _msg_("recv: %s", buf);
+
     while (new_conn->state != CLOSED)
         ;
 
