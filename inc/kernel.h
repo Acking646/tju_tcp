@@ -5,20 +5,28 @@
 #include "tju_packet.h"
 #include <unistd.h>
 #include "tju_tcp.h"
-#include "debug.h"
 
 #define MAX_SOCK 32
 tju_tcp_t *listen_socks[MAX_SOCK];
 tju_tcp_t *established_socks[MAX_SOCK];
+
+// 自定义
 typedef struct
 {
-  tju_tcp_t *data[MAX_SOCK]; // 存放队列元素的数组
-  int front;                 // 指向队首的索引
-  int rear;                  // 指向队尾的索引
-  int size;                  // 队列当前的元素数量
-} queue;
+  tju_tcp_t *sock;
+  clock_t last_ack_time; // 超时重传用
+  uint16_t remains;      // 剩余发送次数
+  char *packet_SYN_ACK;  // 指向待发送SYN_ACK报文
+} semi_conn;             // 半连接结构
 
-queue accept_queue;
+#define SEMI_DEFAULT_REMAINS 10
+
+semi_conn semi_conn_queue[MAX_SOCK];
+uint16_t semi_num; // 半连接队列元素个数
+pthread_mutex_t semi_queue_lock;
+tju_tcp_t *full_conn_queue[MAX_SOCK]; // 全连接队列
+uint16_t full_num;                    // 全连接队列元素个数
+pthread_mutex_t full_queue_lock;
 
 /*
 模拟Linux内核收到一份TCP报文的处理函数
@@ -55,29 +63,10 @@ int BACKEND_UDPSOCKET_ID;
 */
 int cal_hash(uint32_t local_ip, uint16_t local_port, uint32_t remote_ip, uint16_t remote_port);
 
-const char *intToIp(uint32_t ip);
-
-// 用于将IP地址转换为字符串
-const char *intToIp(uint32_t ip);
-
-// 初始化server接收连接队列
-void initQueue(queue *q);
-
-// 检查队列是否为空
-int isEmpty(queue *q);
-
-// 检查队列是否已满
-int isFull(queue *q);
-
-// 元素加入队列
-void enqueue(queue *q, tju_tcp_t *value);
-
-// 元素出队列
-tju_tcp_t *dequeue(queue *q);
-
-// 获取队首元素但不出队
-tju_tcp_t *peek(queue *q);
-
-void send_pkt(tju_tcp_t *sock, char *pkt, int len);
+void init_queue();                                   // 初始化
+void en_semi_conn_queue(tju_tcp_t *sock, char *pkt); // 将socket加入半连接队列
+tju_tcp_t *get_from_semi(char *pkt);                 // 从半连接队列中取出socket
+void en_full_conn_queue(tju_tcp_t *sock);            // 将socket加入全连接队列
+tju_tcp_t *get_from_full();
 
 #endif

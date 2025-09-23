@@ -1,11 +1,9 @@
 #include "kernel.h"
-#include "stdio.h"
 /*
 模拟Linux内核收到一份TCP报文的处理函数
 */
 void onTCPPocket(char *pkt)
 {
-    // printf("onTCPPocket\n"); // 调试输出
     // 当我们收到TCP包时 包中 源IP 源端口 是发送方的 也就是我们眼里的 远程(remote) IP和端口
     uint16_t remote_port = get_src(pkt);
     uint16_t local_port = get_dst(pkt);
@@ -65,15 +63,14 @@ void sendToLayer3(char *packet_buf, int packet_len)
     // 获取hostname 根据hostname 判断是客户端还是服务端
     char hostname[8];
     gethostname(hostname, 8);
-    // printf("sendToLayer3 on hostname: %s\n", hostname);
-    struct sockaddr_in conn; // 声明了一个 IPv4 套接字地址结构体
+
+    struct sockaddr_in conn;
     conn.sin_family = AF_INET;
     conn.sin_port = htons(20218);
     int rst;
     if (strcmp(hostname, "server") == 0)
     {
         conn.sin_addr.s_addr = inet_addr(CLIENT_IP);
-        // 负责把内存里的 TCP 报文直接通过 UDP 送出去
         rst = sendto(BACKEND_UDPSOCKET_ID, packet_buf, packet_len, 0, (struct sockaddr *)&conn, sizeof(conn));
     }
     else if (strcmp(hostname, "client") == 0)
@@ -108,7 +105,6 @@ void *receive_thread(void *arg)
 
     while (1)
     {
-        // printf("working\n");
         // MSG_PEEK 表示看一眼 不会把数据从缓冲区删除
         len = recvfrom(BACKEND_UDPSOCKET_ID, hdr, DEFAULT_HEADER_LEN, MSG_PEEK, (struct sockaddr *)&from_addr, &from_addr_size);
         // 一旦收到了大于header长度的数据 则接受整个TCP包
@@ -122,63 +118,9 @@ void *receive_thread(void *arg)
                 n = recvfrom(BACKEND_UDPSOCKET_ID, pkt + buf_size, plen - buf_size, NO_FLAG, (struct sockaddr *)&from_addr, &from_addr_size);
                 buf_size = buf_size + n;
             }
-            printf("receive_thread:received a packet\n");
             // 通知内核收到一个完整的TCP报文
             onTCPPocket(pkt);
             free(pkt);
-        }
-    }
-}
-
-/*
- 仿真发送数据线程
-*/
-void *send_thread(void *arg)
-{
-    // 检查 sock->sending_buf
-    // 如果不为空 则调用sendToLayer3发送数据
-    // 发送完毕后 释放sock->sending_buf
-    while (1)
-    {
-        int index;
-        for (index = 0; index < MAX_SOCK; index++)
-        {
-            if (established_socks[index] != NULL)
-            {
-                tju_tcp_t *sock = established_socks[index];
-                while (pthread_mutex_lock(&(sock->send_lock)) != 0)
-                    ; // 加锁
-
-                if (sock->sending_len > 0)
-                {
-                    int len = sock->sending_len <= MAX_LEN - DEFAULT_HEADER_LEN ? sock->sending_len : MAX_LEN - DEFAULT_HEADER_LEN;
-
-                    // 截断 len
-                    char *pkt = malloc(len);
-                    memcpy(pkt, sock->sending_buf, len);
-
-                    // 组装 packet
-                    char *msg =
-                        create_packet_buf(sock->established_local_addr.port, sock->established_remote_addr.port,
-                                          sock->window.wnd_send->nextseq, sock->window.wnd_recv->expect_seq,
-                                          DEFAULT_HEADER_LEN, len + DEFAULT_HEADER_LEN, ACK_FLAG_MASK, 1, 0, pkt, len);
-
-                    // 发送
-                    send_pkt(sock, msg, len + DEFAULT_HEADER_LEN);
-
-                    // 释放
-                    free(pkt);
-                    free(msg);
-                    char *new_buf = malloc(sock->sending_len - len);
-                    memcpy(new_buf, sock->sending_buf + len, sock->sending_len - len);
-                    free(sock->sending_buf);
-                    sock->sending_buf = new_buf;
-                    sock->sending_len -= len;
-                    _debug_("send a packet: len = %d", len);
-                }
-
-                pthread_mutex_unlock(&(sock->send_lock)); // 解锁
-            }
         }
     }
 }
@@ -203,7 +145,7 @@ void startSimulation()
     // 获取hostname
     char hostname[8];
     gethostname(hostname, 8);
-    _info_("startSimulation on hostname: %s", hostname);
+    // printf("startSimulation on hostname: %s\n", hostname);
 
     BACKEND_UDPSOCKET_ID = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
     if (BACKEND_UDPSOCKET_ID < 0)
@@ -212,7 +154,7 @@ void startSimulation()
         exit(-1);
     }
 
-    // 设置socket选项 SO_REUSEADDR = 1 允许端口复用 避免 socket 关闭后进入 TIME_WAIT 状态时，无法重新绑定同一个端口
+    // 设置socket选项 SO_REUSEADDR = 1
     // 意思是 允许绑定本地地址冲突 和 改变了系统对处于TIME_WAIT状态的socket的看待方式
     int optval = 1;
     setsockopt(BACKEND_UDPSOCKET_ID, SOL_SOCKET, SO_REUSEADDR, (const void *)&optval, sizeof(int));
@@ -220,7 +162,7 @@ void startSimulation()
     struct sockaddr_in conn;
     memset(&conn, 0, sizeof(conn));
     conn.sin_family = AF_INET;
-    conn.sin_addr.s_addr = htonl(INADDR_ANY); // INADDR_ANY = 0.0.0.0 表示绑定所有本地网卡
+    conn.sin_addr.s_addr = htonl(INADDR_ANY); // INADDR_ANY = 0.0.0.0
     conn.sin_port = htons((unsigned short)20218);
 
     if (bind(BACKEND_UDPSOCKET_ID, (struct sockaddr *)&conn, sizeof(conn)) < 0)
@@ -229,7 +171,6 @@ void startSimulation()
         exit(-1);
     }
 
-    // 单独开一个后台线程 receive_thread，不断从 BACKEND_UDPSOCKET_ID 上 recvfrom，获取报文
     pthread_t thread_id = 1001;
     int rst = pthread_create(&thread_id, NULL, receive_thread, (void *)(&BACKEND_UDPSOCKET_ID));
     if (rst < 0)
@@ -238,128 +179,118 @@ void startSimulation()
         exit(-1);
     }
     // printf("successfully created bankend thread\n");
-    // 创建一个线程 不断调用send_thread
-    pthread_t thread_id2 = 1002;
-    rst = pthread_create(&thread_id2, NULL, send_thread, (void *)(&BACKEND_UDPSOCKET_ID));
-    if (rst < 0)
-    {
-        printf("ERROR open thread");
-        exit(-1);
-    }
-
-    printf("successfully created bankend thread\n");
     return;
 }
 
 int cal_hash(uint32_t local_ip, uint16_t local_port, uint32_t remote_ip, uint16_t remote_port)
 {
     // 实际上肯定不是这么算的
-    int ret = ((int)local_ip + (int)local_port + (int)remote_ip + (int)remote_port) % MAX_SOCK;
-    if (ret < 0)
+    return ((int)local_ip + (int)local_port + (int)remote_ip + (int)remote_port) % MAX_SOCK;
+}
+
+// self-define function
+
+void init_queue()
+{ // 初始化
+    for (int i = 0; i < MAX_SOCK; i++)
     {
-        return ret + MAX_SOCK;
+        semi_conn_queue[i].sock = full_conn_queue[i] = NULL;
+        semi_conn_queue[i].packet_SYN_ACK = NULL;
+    }
+    semi_num = full_num = 0;
+    // 初始化锁
+    pthread_mutex_init(&(semi_queue_lock), NULL);
+    pthread_mutex_init(&(full_queue_lock), NULL);
+}
+
+void en_semi_conn_queue(tju_tcp_t *sock, char *pkt)
+{ // 将socket加入半连接队列
+    int hashval;
+    hashval = cal_hash(sock->established_local_addr.ip, sock->established_local_addr.port,
+                       sock->established_remote_addr.ip, sock->established_remote_addr.port);
+    pthread_mutex_lock(&(semi_queue_lock));
+    if (semi_conn_queue[hashval].sock == NULL)
+    {
+        semi_conn_queue[hashval].sock = sock;
+        semi_conn_queue[hashval].last_ack_time = clock();
+        semi_conn_queue[hashval].remains = SEMI_DEFAULT_REMAINS;
+        semi_conn_queue[hashval].packet_SYN_ACK = pkt;
+        semi_num++;
     }
     else
     {
-        return ret;
+        printf("this socket have already in semi_conn_queue\n");
     }
-    // return ((int)local_ip + (int)local_port + (int)remote_ip + (int)remote_port) % MAX_SOCK;
+    pthread_mutex_unlock(&(semi_queue_lock));
 }
 
-const char *intToIp(uint32_t ip)
-{
-    static char ipStr[16]; // IPv4地址的字符串表示最多15个字符，加上终止符'\0'
-    snprintf(ipStr, sizeof(ipStr), "%u.%u.%u.%u",
-             (ip >> 24) & 0xFF, // 取最高的8位
-             (ip >> 16) & 0xFF, // 取次高的8位
-             (ip >> 8) & 0xFF,  // 取次低的8位
-             ip & 0xFF);        // 取最低的8位
-    return ipStr;
-}
-
-void initQueue(queue *q)
-{
-    q->front = 0;
-    q->rear = -1;
-    q->size = 0;
-}
-
-// 检查队列是否为空
-int isEmpty(queue *q)
-{
-    return q->size == 0;
-}
-
-// 检查队列是否已满
-int isFull(queue *q)
-{
-    return q->size == MAX_SOCK;
-}
-
-// 入队操作
-void enqueue(queue *q, tju_tcp_t *value)
-{
-    if (isFull(q))
-    {
-        printf("Queue is full\n");
-        return;
-    }
-
-    q->rear = (q->rear + 1) % MAX_SOCK;
-    q->data[q->rear] = value;
-    q->size++;
-}
-
-// 出队操作
-tju_tcp_t *dequeue(queue *q)
-{
-    if (isEmpty(q))
-    {
-        printf("Queue is empty\n");
+tju_tcp_t *get_from_semi(char *pkt)
+{ // 从半连接队列中取出socket
+    pthread_mutex_lock(&(semi_queue_lock));
+    if (semi_num == 0)
+    { // 半连接队列为空
+        pthread_mutex_unlock(&(semi_queue_lock));
         return NULL;
     }
+    tju_tcp_t *ret;
+    tju_sock_addr local_addr, remote_addr;
+    local_addr.ip = inet_network(SERVER_IP);
+    local_addr.port = get_dst(pkt);
+    remote_addr.ip = inet_network(CLIENT_IP);
+    remote_addr.port = get_src(pkt);
 
-    tju_tcp_t *value = q->data[q->front];
-    q->front = (q->front + 1) % MAX_SOCK;
-    q->size--;
-    return value;
+    int hashval = cal_hash(local_addr.ip, local_addr.port, remote_addr.ip, remote_addr.port);
+    if (semi_conn_queue[hashval].sock != NULL)
+    {
+        ret = semi_conn_queue[hashval].sock;
+        semi_conn_queue[hashval].sock = NULL;
+        free(semi_conn_queue[hashval].packet_SYN_ACK);
+        semi_conn_queue[hashval].packet_SYN_ACK = NULL;
+        semi_num--;
+    }
+    else
+    {
+        ret = NULL;
+    }
+    pthread_mutex_unlock(&(semi_queue_lock));
+    return ret;
 }
 
-// 获取队首元素但不出队
-tju_tcp_t *peek(queue *q)
+void en_full_conn_queue(tju_tcp_t *sock)
 {
-    if (isEmpty(q))
+    int hashval;
+    hashval = cal_hash(sock->established_local_addr.ip, sock->established_local_addr.port,
+                       sock->established_remote_addr.ip, sock->established_remote_addr.port);
+    pthread_mutex_lock(&(full_queue_lock));
+    if (full_conn_queue[hashval] == NULL)
     {
-        printf("Queue is empty\n");
-        return NULL;
+        full_conn_queue[hashval] = sock;
+        full_num++;
     }
-    return q->data[q->front];
+    else
+    {
+        printf("this socket have already in full_conn_queue\n");
+    }
+    pthread_mutex_unlock(&(full_queue_lock));
 }
 
-void send_pkt(tju_tcp_t *sock, char *pkt, int len)
+tju_tcp_t *get_from_full()
 {
-    sendToLayer3(pkt, len);
-    log_event(sock->file, "SEND", "seq:%d ack:%d flag:%d length:%d", get_seq(pkt), get_ack(pkt), get_flags(pkt),
-              get_plen(pkt) - DEFAULT_HEADER_LEN);
-    sock->window.wnd_send->nextseq += len == DEFAULT_HEADER_LEN ? 1 : len - DEFAULT_HEADER_LEN;
-
-    if (sock->resend_list->count == MAX_PKG)
+    while (full_num == 0)
+        ;
+    tju_tcp_t *ret;
+    pthread_mutex_lock(&(full_queue_lock));
+    for (int i = 0; i < MAX_SOCK; i++)
     {
-        _debug_("重传列表已满，链接状态差，丢弃该数据包");
-        return;
+        if (full_conn_queue[i] != NULL)
+        {
+            ret = full_conn_queue[i];
+            full_conn_queue[i] = NULL;
+            full_num--;
+            pthread_mutex_unlock(&(full_queue_lock));
+            return ret;
+        }
     }
-    int i = 0;
-    while (sock->resend_list->pkt[i] != NULL)
-    {
-        i++;
-    }
-
-    pthread_mutex_lock(&(sock->resend_list->send_list));
-    sock->resend_list->pkt[i] = malloc(len);
-    memcpy(sock->resend_list->pkt[i], pkt, len);
-    sock->resend_list->send_time[i] = getCurrentTime();
-    sock->resend_list->count++;
-    pthread_mutex_unlock(&(sock->resend_list->send_list));
-
-    _info_("add a packet to resend list, count = %d", sock->resend_list->count);
+    pthread_mutex_unlock(&(full_queue_lock));
+    return NULL;
 }

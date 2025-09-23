@@ -1,17 +1,6 @@
 #include "tju_packet.h"
 
 /*
-简化版的 TCP 初始序列号生成器
-*/
-uint32_t isn_gen()
-{
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    srand(tv.tv_usec); // Use microseconds to ensure different seeds
-    uint32_t isn = (uint32_t)rand();
-    return isn % 4096;
-}
-/*
  输入header所有字段 和 TCP包数据内容及其长度
  构造tju_packet_t
  返回其指针
@@ -36,7 +25,7 @@ tju_packet_t *create_packet(uint16_t src, uint16_t dst, uint32_t seq,
     if (len > 0)
     {
         new->data = malloc(len);
-        new->data = memcpy(new->data, data, len); // 复制数据
+        new->data = memcpy(new->data, data, len);
     }
     else
     {
@@ -73,7 +62,7 @@ char *create_packet_buf(uint16_t src, uint16_t dst, uint32_t seq, uint32_t ack,
  */
 void free_packet(tju_packet_t *packet)
 {
-    if (packet->data != NULL) // if是否多余
+    if (packet->data != NULL)
         free(packet->data);
     free(packet);
 }

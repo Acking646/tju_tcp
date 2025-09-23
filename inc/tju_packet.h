@@ -64,11 +64,6 @@ char *create_packet_buf(uint16_t src, uint16_t dst, uint32_t seq, uint32_t ack,
 void free_packet(tju_packet_t *packet);
 
 /*
-定义is_gen
-*/
-uint32_t isn_gen();
-
-/*
  下面的函数全部都是从一个packet的字符串中
  根据各个字段的偏移量
  找到并返回对应的字段

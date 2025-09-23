@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "timer.h": "c",
-        "time_helper.h": "c"
+        "time_helper.h": "c",
+        "stdlib.h": "c"
     }
 }

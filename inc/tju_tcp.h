@@ -5,7 +5,6 @@
 #include "tju_packet.h"
 #include "kernel.h"
 
-#include "time_helper.h"
 /*
 创建 TCP socket
 初始化对应的结构体
@@ -50,5 +49,24 @@ int tju_recv(tju_tcp_t *sock, void *buffer, int len);
 */
 int tju_close(tju_tcp_t *sock);
 
+#define min(x, y) ((x < y) ? (x) : (y)) // 宏定义 min() 函数
+
 int tju_handle_packet(tju_tcp_t *sock, char *pkt);
+
+void *tju_close_thread(void *arg);
+
+uint16_t generate_port();
+
+void *sending_thread(void *arg);
+
+void *retrans_thread(void *arg);
+
+void timeout_handler(int signo);
+
+void startTimer(tju_tcp_t *sock);
+
+void stopTimer(void);
+
+uint16_t get_wnd_move_len(uint8_t *mark);
+
 #endif
