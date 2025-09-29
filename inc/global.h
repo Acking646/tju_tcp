@@ -17,8 +17,8 @@
 #include <stdbool.h> // 使用 bool 类型
 #include <signal.h>	 // 使用 signal 函数
 
-#define SERVER_IP "172.17.0.6"
-#define CLIENT_IP "172.17.0.5"
+#define SERVER_IP "172.17.0.3"
+#define CLIENT_IP "172.17.0.2"
 
 // 初始化序列号
 #define SERVER_ISN 0
@@ -75,33 +75,37 @@ bool TIMEOUT_FLAG;
 
 // TCP 发送窗口
 // 注释的内容如果想用就可以用 不想用就删掉 仅仅提供思路和灵感
+/* 序号空间：[0 ... base ... nextseq ... base+window_size ...]
+- 左区（≤ base-1）：已发送且已确认（可释放资源）
+- 中区（base ≤ seq < nextseq）：已发送但未确认（需监控超时/重复ACK，准备重传）
+- 右区（≥ nextseq 且 ≤ base+window_size）：未发送但允许发送（可根据窗口大小发送）
+- 右区外（> base+window_size）：禁止发送（超出接收方通告窗口） */
 typedef struct
 {
-	uint32_t window_size; // 由发送来的adv_window来决定, adv_window根据接收方的接收缓冲区决定
-	uint32_t base;
-	uint32_t nextseq; // base 与 nextseq 之间是“已发未确认”区段
-	//   uint32_t estmated_rtt;
-	int ack_cnt;
-	uint32_t same_ack_cnt;
-	// pthread_mutex_t ack_cnt_lock;
-	struct timeval send_time;
-	struct itimerval timeout;
-	//   int congestion_status;
-	//   uint16_t cwnd;
-	//   uint16_t ssthresh;
+	uint32_t window_size; // 接收方通告的窗口大小（流量控制依据）
+	uint32_t base;		  // 发送窗口的“左边界”：已发送但未确认的最小序号
+	uint32_t nextseq;	  // 发送窗口的“右边界”：下一个待发送的序号
+	// uint32_t estmated_rtt;    // （预留）估计往返时间（用于动态调整超时时间）
+	int ack_cnt;		   // （预留）ACK计数器（可能用于统计确认次数）
+	uint32_t same_ack_cnt; // 重复ACK计数器（用于快速重传触发）
+	// pthread_mutex_t ack_cnt_lock; // （预留）ACK计数的线程安全锁
+	struct timeval send_time; // （已发送未确认数据的）发送时间戳（用于超时判断）
+	struct itimerval timeout; // 超时定时器（用于重传触发）
+							  // int congestion_status;    // （预留）拥塞控制状态（慢启动/拥塞避免等）
+							  // uint16_t cwnd;            // （预留）拥塞窗口大小（拥塞控制核心）
+							  // uint16_t ssthresh;        // （预留）慢启动阈值（拥塞控制阈值）
 } sender_window_t;
 
 // TCP 接受窗口
 // 注释的内容如果想用就可以用 不想用就删掉 仅仅提供思路和灵感
 typedef struct
 {
-	// char *wnd_recv_buf;
-	uint32_t wnd_available_size; // 接收窗口还可以放入数据的大小
-
-	//   received_packet_t* head;
-	//   char buf[TCP_RECVWN_SIZE];
-	uint8_t *marked;
-	uint32_t expect_seq; // 当前希望收到的序号，等于 rcv_nxt
+	// char *wnd_recv_buf;       // （预留）接收窗口专用缓冲区（可替代全局received_buf）
+	uint32_t wnd_available_size; // 接收窗口的可用空间（流量控制反馈依据）
+	// received_packet_t* head;  // （预留）乱序数据包链表（存储未按序到达的数据）
+	// char buf[TCP_RECVWN_SIZE];// （预留）接收窗口固定大小缓冲区
+	uint8_t *marked;	 // 接收标记数组（标记哪些序号的数据已收到）
+	uint32_t expect_seq; // 期望接收的下一个序号（即 TCP 协议中的 rcv_nxt）
 } receiver_window_t;
 
 // TCP 窗口 每个建立了连接的TCP都包括发送和接受两个窗口
